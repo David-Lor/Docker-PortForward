@@ -1,0 +1,21 @@
+name: "Docker Build & Push"
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      image_tag_version:
+        description: "Version of image tag (after ':')"
+        required: true
+
+jobs:
+  build_push:
+    name: "Docker Build & Push"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@master
+        with:
+          fetch-depth: 1
