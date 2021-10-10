@@ -32,5 +32,7 @@ docker run -d --name=portforward --net=host -e PORT1="9999:192.168.0:10:9000" -e
 
 ## Changelog
 
+- 0.0.2
+    - Fix socat command
 - 0.0.1
     - Initial release
