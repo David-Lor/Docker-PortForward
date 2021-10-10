@@ -1,0 +1,53 @@
+name: "Tag on merged PR"
+# This workflow is triggered when a pull request for branch main is closed and merged.
+# Creates a new tag on the merge commit.
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+jobs:
+  tag:
+    name: "Tag merged PR"
+    if: "github.event.pull_request.merged == true"  # only run on merged PR
+    runs-on: "ubuntu-latest"
+    steps:
+    # Setup
+      - name: "Checkout"
+        uses: actions/checkout@v2
+      - name: "Setup Python"
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.7
+          architecture: x64
+
+    # Extract tag
+      - name: "Get Pull Request data"
+        id: PR
+        uses: 8BitJonny/gh-get-current-pr@1.1.0
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"  # Automatically given
+          filterOutClosed: false
+      - name: "Extract tag from Pull Request data"
+        run: python .github/workflows/tag/extract_tag_from_pr.py
+        if: success() && steps.PR.outputs.number
+        env:
+          PR_JSON_DATA: "${{ steps.PR.outputs.pr }}"
+          VERSION_FILE: "/tmp/version.txt"
+      - name: "Read tag from output file"
+        id: tagRead
+        uses: juliangruber/read-file-action@v1
+        if: success() && steps.PR.outputs.number
+        with:
+          path: "/tmp/version.txt"
+
+    # Push tag
+      - name: "Tag commit"
+        uses: tvdias/github-tagger@v0.0.1
+        if: success() && steps.PR.outputs.number && steps.tagRead.outputs.content
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          tag: "${{ steps.tagRead.outputs.content }}"
