@@ -26,6 +26,11 @@ The complete Docker Run command would be the following:
 docker run -d --name=portforward --net=host -e PORT1="9999:192.168.0:10:9000" -e PORT_B="192.168.0.100:8080" ghcr.io/david-lor/portforward
 ```
 
+### Socks proxy support
+
+The environment variable `SOCKS_PROXY` can be used for specifying the `ip:port` of a SOCKSv4 proxy to use for reaching the remote port.
+This will be applied to ALL the port mappings on the current container.
+
 ## TODO
 
 - Multiarch images

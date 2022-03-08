@@ -9,11 +9,22 @@ import (
 
 // Env var format: PORT=localport:remotehost:remoteport
 const ENV_PREFIX = "PORT"
+const ENV_SOCKS_PROXY = "SOCKS_PROXY"
 
 type PortForward struct {
 	LocalPort  int64
 	RemoteHost string
 	RemotePort int64
+}
+
+type SocksProxy struct {
+	Host string
+	Port int
+}
+
+type Settings struct {
+	Ports      []*PortForward
+	SocksProxy *SocksProxy
 }
 
 func (p *PortForward) ToString() string {
@@ -32,9 +43,7 @@ func getAllEnvironmentVariables() map[string]string {
 	return environment
 }
 
-func getPortsEnvironmentVariables() []string {
-	allEnv := getAllEnvironmentVariables()
-
+func getPortsEnvironmentVariables(allEnv map[string]string) []string {
 	var portsEnvs []string
 	for key := range allEnv {
 		if strings.HasPrefix(key, ENV_PREFIX) {
@@ -78,8 +87,8 @@ func parseEnvPort(envValue string) (portForward *PortForward, err error) {
 	return
 }
 
-func LoadPorts() (ports []*PortForward, errors []error) {
-	portsEnvVars := getPortsEnvironmentVariables()
+func loadPorts(allEnv map[string]string) (ports []*PortForward, errors []error) {
+	portsEnvVars := getPortsEnvironmentVariables(allEnv)
 	for _, value := range portsEnvVars {
 		parsedPort, err := parseEnvPort(value)
 
@@ -90,5 +99,53 @@ func LoadPorts() (ports []*PortForward, errors []error) {
 		}
 	}
 
+	return
+}
+
+func loadSocksProxy(allEnv map[string]string) (proxy *SocksProxy, errors []error) {
+	rawProxy := allEnv[ENV_SOCKS_PROXY]
+	if rawProxy == "" {
+		return
+	}
+
+	chunks := strings.Split(rawProxy, ":")
+	if len(chunks) != 2 {
+		errors = []error{fmt.Errorf("unvalid socks proxy, must be in format 'ip:port'")}
+		return
+	}
+
+	host := chunks[0]
+	port, err := strconv.ParseInt(chunks[1], 10, 32)
+	if err != nil {
+		errors = []error{fmt.Errorf("unvalid socks proxy port: %s", err)}
+		return
+	}
+
+	proxy = &SocksProxy{
+		Host: host,
+		Port: int(port),
+	}
+	return
+}
+
+func LoadSettings() (settings *Settings, errors []error) {
+	allEnv := getAllEnvironmentVariables()
+
+	ports, errors := loadPorts(allEnv)
+	if len(ports) == 0 && len(errors) == 0 {
+		errors = append(errors, fmt.Errorf("no ports defined"))
+	}
+
+	socksProxy, errors2 := loadSocksProxy(allEnv)
+	errors = append(errors, errors2...)
+
+	if errors != nil {
+		return
+	}
+
+	settings = &Settings{
+		Ports:      ports,
+		SocksProxy: socksProxy,
+	}
 	return
 }
