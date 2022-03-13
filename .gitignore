@@ -1,0 +1,7 @@
+.idea/
+.vscode/
+.env
+*pycache*
+.pytest_cache
+*.pyc
+forwarder/**/*.test

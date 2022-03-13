@@ -6,9 +6,9 @@ import (
 )
 
 func main() {
-	ports, errors := LoadPorts()
+	settings, errors := LoadSettings()
 	if errors != nil {
-		fmt.Println("Invalid port mapping/s found:")
+		fmt.Println("Errors in settings:")
 		for _, err := range errors {
 			fmt.Println(err.Error())
 		}
@@ -16,10 +16,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	if len(ports) == 0 {
-		fmt.Println("No ports configured!")
-		os.Exit(1)
-	}
-
-	ForwardPorts(ports)
+	ForwardPorts(settings)
 }

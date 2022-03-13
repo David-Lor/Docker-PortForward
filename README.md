@@ -26,13 +26,33 @@ The complete Docker Run command would be the following:
 docker run -d --name=portforward --net=host -e PORT1="9999:192.168.0:10:9000" -e PORT_B="192.168.0.100:8080" ghcr.io/david-lor/portforward
 ```
 
+### Port range
+
+Multiple ports, on a given range in series, can be forwarded using a single environment variable. For doing so, using the same syntax as with normal ports, give a range with the format `START-END` (being START and END both included), in the place of the port.
+
+For example, if you want to forward ports 1000 to 1010 from 192.168.0.10 to the same local ports (1000~1010 respectively),
+you can define an environment variable like: `PORTS1=192.168.0.10:1000-1010`.
+
+A range can also be specified for the local ports. In this case, the ranges of local and remote ports must have the same length.
+For example, if you want to forward ports 1000 to 1010 from 192.168.0.10 to local ports 2000 to 2010 respectively,
+you can define an environment variable like: `PORTS2=2000-2010:192.168.0.10:1000-1010`
+
+### Socks proxy support
+
+The environment variable `SOCKS_PROXY` can be used for specifying the `ip:port` of a SOCKSv4 proxy to use for reaching the remote port.
+This will be applied to ALL the port mappings on the current container.
+
 ## TODO
 
 - Multiarch images
 
 ## Changelog
 
+- 0.1.1
+  - Port range forwarding (one socat command per port)
+  - SOCKS proxy support (socat)
+  - Add tests, integrated in GitHub Actions
 - 0.0.2
-    - Fix socat command
+  - Fix socat command
 - 0.0.1
-    - Initial release
+  - Initial release
