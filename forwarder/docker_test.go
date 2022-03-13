@@ -22,6 +22,8 @@ const (
 	DockerTestTorproxyPort          = 9050
 	RegexIpv4                       = "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$"
 	DockerDeployThinktime           = 2 * time.Second
+	HttpTimeout                     = 5 * time.Second
+	HttpRetries                     = 3
 )
 
 var (
@@ -29,7 +31,19 @@ var (
 	runSudo          bool
 )
 
-func setup() {
+type PortRangeForward struct {
+	LocalPortStart  int64
+	LocalPortEnd    int64
+	RemoteHost      string
+	RemotePortStart int64
+	RemotePortEnd   int64
+}
+
+func dockertestSetup(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
 	allEnv := getAllEnvironmentVariables()
 	portForwardImage = allEnv[EnvPortforwardImage]
 	if allEnv[EnvUseSudo] == "1" {
@@ -49,7 +63,7 @@ func setup() {
 	}
 }
 
-func teardown() {
+func dockertestTeardown() {
 	clearTestContainers()
 	clearTestNetwork()
 }
@@ -69,7 +83,7 @@ func runCmd(chunks ...string) (string, error) {
 		fmt.Println("Command failed!", err)
 	}
 	if output != "" {
-		fmt.Println("Command output:", output)
+		fmt.Println("Command output:", strings.TrimSpace(output))
 	} else {
 		fmt.Println("No command output")
 	}
@@ -99,18 +113,12 @@ func clearTestContainers() {
 		finalCmd = append(finalCmd, containers...)
 		_, _ = runCmd(finalCmd...)
 	}
-
-	//_, _ = runCmd("docker", "container", "prune", "--force", "--filter", fmt.Sprintf("label=%s", DOCKER_TEST_CONTAINERS_LABEL))
 }
 
 func runContainer(name string, args ...string) error {
 	cmd := []string{"docker", "run", "-d", "--rm", "--name", name, "--label", DockerTestContainersLabel, "--network", DockerTestNetworkName}
 	cmd = append(cmd, args...)
 	_, err := runCmd(cmd...)
-
-	//if err == nil {
-	//	testCtx.createdContainers = append(testCtx.createdContainers, name)
-	//}
 	return err
 }
 
@@ -124,19 +132,32 @@ func startTorProxyContainer() error {
 	return runContainer(DockerTestTorproxyContainerName, "dperson/torproxy")
 }
 
-func startPortForwardContainer(name string, ports []PortForward, proxy *SocksProxy) error {
+func startPortForwardContainer(name string, ports []PortForward, portsRanges []PortRangeForward, proxy *SocksProxy, exposePorts bool) error {
 	var args []string
 	for i, port := range ports {
 		envName := fmt.Sprintf("PORT%d", i)
 		envValue := fmt.Sprintf("%d:%s:%d", port.LocalPort, port.RemoteHost, port.RemotePort)
 		envArg := fmt.Sprintf("%s=%s", envName, envValue)
-		portArg := fmt.Sprintf("%d:%d", port.LocalPort, port.LocalPort)
+		args = append(args, "-e", envArg)
+
+		if exposePorts {
+			portArg := fmt.Sprintf("%d:%d", port.LocalPort, port.LocalPort)
+			args = append(args, "-p", portArg)
+		}
+	}
+
+	for i, port := range portsRanges {
+		envName := fmt.Sprintf("PORTRNG%d", i)
+		envValue := fmt.Sprintf("%d-%d:%s:%d-%d", port.LocalPortStart, port.LocalPortEnd, port.RemoteHost, port.RemotePortStart, port.RemotePortEnd)
+		envArg := fmt.Sprintf("%s=%s", envName, envValue)
+		portArg := fmt.Sprintf("%d-%d:%d-%d", port.LocalPortStart, port.LocalPortEnd, port.LocalPortStart, port.LocalPortEnd)
 
 		portArgs := []string{"-p", portArg, "-e", envArg}
 		args = append(args, portArgs...)
-		if proxy != nil {
-			args = append(args, "-e", fmt.Sprintf("SOCKS_PROXY=%s:%d", proxy.Host, proxy.Port))
-		}
+	}
+
+	if proxy != nil {
+		args = append(args, "-e", fmt.Sprintf("SOCKS_PROXY=%s:%d", proxy.Host, proxy.Port))
 	}
 
 	args = append(args, portForwardImage)
@@ -170,7 +191,16 @@ func requestNginxGetHostname(port int64) (string, error) {
 
 func requestHttpbinIP(baseURL string) (string, error) {
 	url := fmt.Sprintf("%s/ip", baseURL)
-	response, err := http.Get(url)
+	client := http.Client{Timeout: HttpTimeout}
+
+	var response *http.Response
+	var err error
+	for i := 0; i < HttpRetries; i++ {
+		response, err = client.Get(url)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return "", err
 	}
@@ -189,9 +219,9 @@ func requestHttpbinIP(baseURL string) (string, error) {
 	return responseBody["origin"], nil
 }
 
-func TestSimpleForward(t *testing.T) {
-	setup()
-	defer teardown()
+func TestSimpleForwardIntegration(t *testing.T) {
+	dockertestSetup(t)
+	defer dockertestTeardown()
 
 	portsForwarded := []PortForward{
 		{
@@ -213,13 +243,15 @@ func TestSimpleForward(t *testing.T) {
 
 		err := startNginxContainer(name)
 		if err != nil {
-			panic(err)
+			t.Error("failed starting nginx container", err)
+			return
 		}
 	}
 
-	err := startPortForwardContainer("portforward-nginxs", portsForwarded, nil)
+	err := startPortForwardContainer("portforward-nginxs", portsForwarded, nil, nil, true)
 	if err != nil {
-		panic(err)
+		t.Error("failed starting port forward container", err)
+		return
 	}
 
 	time.Sleep(DockerDeployThinktime)
@@ -232,19 +264,20 @@ func TestSimpleForward(t *testing.T) {
 	}
 }
 
-// TestProxyForward
+// TestProxyForwardIntegration
 // 1. Run a Tor proxy container
 // 2. Run a portforward container, redirecting a port to httpbin.org:80, using the Tor proxy
 // 3. Request the current public IP to httpbin.org/ip
 // 4. Request the current public IP to localhost:forwardport/ip (going through the portforward and proxy)
 // 5. Compare the IPs. Must be valid and not match
-func TestProxyForward(t *testing.T) {
-	setup()
-	defer teardown()
+func TestProxyForwardIntegration(t *testing.T) {
+	dockertestSetup(t)
+	defer dockertestTeardown()
 
 	err := startTorProxyContainer()
 	if err != nil {
-		panic(err)
+		t.Error("failed starting tor proxy container")
+		return
 	}
 
 	localPort := int64(8080)
@@ -259,16 +292,18 @@ func TestProxyForward(t *testing.T) {
 		Port: DockerTestTorproxyPort,
 	}
 
-	err = startPortForwardContainer("portforward-httpbin", []PortForward{portForward}, &proxy)
+	err = startPortForwardContainer("portforward-httpbin", []PortForward{portForward}, nil, &proxy, true)
 	if err != nil {
-		panic(err)
+		t.Error("failed starting portforward container", err)
+		return
 	}
 
 	time.Sleep(DockerDeployThinktime)
 
 	ipVanilla, err := requestHttpbinIP(fmt.Sprintf("https://%s", remoteHost))
 	if err != nil {
-		panic(err)
+		t.Error("failed vanilla httpbin request", err)
+		return
 	}
 
 	ipPortForward, err := requestHttpbinIP(fmt.Sprintf("http://localhost:%d", localPort))
@@ -280,4 +315,68 @@ func TestProxyForward(t *testing.T) {
 	assert.Regexp(t, RegexIpv4, ipVanilla)
 	assert.Regexp(t, RegexIpv4, ipPortForward)
 	assert.NotEqual(t, ipVanilla, ipPortForward)
+}
+
+// TestSimpleRangeForwardIntegration
+// 1. Run N nginx containers
+// 2. Run a "middle forwarder", forwarding each container
+// 3. Run a "final forwarder" (the currently tested), with a range forward to the "middle forwarder"
+// 4. Test each port on the "final forwarder"
+func TestSimpleRangeForwardIntegration(t *testing.T) {
+	dockertestSetup(t)
+	defer dockertestTeardown()
+
+	var portStart int64 = 8880
+	var portEnd int64 = 8889
+	portRangeLength := portEnd - portStart
+
+	var middleForwarderPorts []PortForward
+	var i int64
+	for i = 0; i < portRangeLength; i++ {
+		containerName := fmt.Sprintf("nginx%d", i)
+		currentPort := portStart + i
+
+		portForward := PortForward{
+			LocalPort:  currentPort,
+			RemoteHost: containerName,
+			RemotePort: 80,
+		}
+		middleForwarderPorts = append(middleForwarderPorts, portForward)
+
+		err := startNginxContainer(containerName)
+		if err != nil {
+			t.Error("failed starting nginx container", i, err)
+			return
+		}
+	}
+
+	middleForwarderName := "forwarder-middle"
+	err := startPortForwardContainer(middleForwarderName, middleForwarderPorts, nil, nil, false)
+	if err != nil {
+		t.Error("failed starting middle port forward container", err)
+		return
+	}
+
+	forwardRange := PortRangeForward{
+		LocalPortStart:  portStart,
+		LocalPortEnd:    portEnd,
+		RemoteHost:      middleForwarderName,
+		RemotePortStart: portStart,
+		RemotePortEnd:   portEnd,
+	}
+
+	err = startPortForwardContainer("forwarder-final", nil, []PortRangeForward{forwardRange}, nil, true)
+	if err != nil {
+		t.Error("failed starting final port forward container", err)
+		return
+	}
+
+	time.Sleep(DockerDeployThinktime)
+
+	for _, portForward := range middleForwarderPorts {
+		expectedHostname := portForward.RemoteHost
+		responseHostname, err := requestNginxGetHostname(portForward.LocalPort)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedHostname, responseHostname)
+	}
 }
