@@ -1,4 +1,4 @@
-FROM golang:1.16-alpine as build
+FROM golang:1.17-alpine as build
 
 COPY ./forwarder /tmp/src
 WORKDIR /tmp/src
