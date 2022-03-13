@@ -48,7 +48,11 @@ This will be applied to ALL the port mappings on the current container.
 
 ## Changelog
 
+- 0.1.1
+  - Port range forwarding (one socat command per port)
+  - SOCKS proxy support (socat)
+  - Add tests, integrated in GitHub Actions
 - 0.0.2
-    - Fix socat command
+  - Fix socat command
 - 0.0.1
-    - Initial release
+  - Initial release
