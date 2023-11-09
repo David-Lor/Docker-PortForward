@@ -7,6 +7,7 @@ Docker image for setting up one or multiple TCP ports forwarding, using socat.
 - The ports mappings are set with environment variables, whose key must start with `PORT`, and then can have any name.
 - Each environment variable can hold only one mapping. For setting multiple ports, many variables must be defined.
 - The format of environment variable values is: `LOCAL_PORT:REMOTE_HOST:REMOTE_PORT` (LOCAL_PORT is optional, if not given, will use the same port as REMOTE_PORT)
+- If you're using a fork of this repo, you can build and pull your own images
 
 ### Example
 
@@ -43,8 +44,7 @@ The environment variable `SOCKS_PROXY` can be used for specifying the `ip:port` 
 This will be applied to ALL the port mappings on the current container.
 
 ## TODO
-
-- Multiarch images
+- [X] Multiarch images
 
 ## Changelog
 
