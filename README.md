@@ -43,11 +43,10 @@ you can define an environment variable like: `PORTS2=2000-2010:192.168.0.10:1000
 The environment variable `SOCKS_PROXY` can be used for specifying the `ip:port` of a SOCKSv4 proxy to use for reaching the remote port.
 This will be applied to ALL the port mappings on the current container.
 
-## TODO
-- [X] Multiarch images
-
 ## Changelog
 
+- 0.2.0
+  - Docker images for `linux/arm64/v8`, `linux/arm/v7`
 - 0.1.1
   - Port range forwarding (one socat command per port)
   - SOCKS proxy support (socat)
