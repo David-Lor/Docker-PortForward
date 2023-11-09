@@ -16,18 +16,16 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image_tag: ${{ steps.image_tag.outputs.image_tag }}
+    env:
+      IMAGE_TAG_PACKAGE_NAME: portforward
     steps:
-      - name: "Lowercase GitHub user and repo"
+      - name: "Lowercase GitHub user"
         id: lowercase_repo
         run: |
           echo "GH_USER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
-          echo "GH_REPO=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
-          # Get just the repository name, not the owner/name format
-          REPO_NAME="${GITHUB_REPOSITORY##*/}"
-          echo "REPO_NAME=${REPO_NAME,,}" >> $GITHUB_ENV
       - name: "Set IMAGE_TAG_BASE and IMAGE_TAG_VERSION_FILE"
         run: |
-          echo "IMAGE_TAG_BASE=ghcr.io/${{ env.GH_USER }}/${{ env.REPO_NAME }}" >> $GITHUB_ENV
+          echo "IMAGE_TAG_BASE=ghcr.io/${{ env.GH_USER }}/${{ env.IMAGE_TAG_PACKAGE_NAME }}" >> $GITHUB_ENV
           echo "IMAGE_TAG_VERSION_FILE=/tmp/image_tag_version.txt" >> $GITHUB_ENV
       - name: "Identify image tag version (from push to main)"
         if: ${{ github.ref == 'refs/heads/main' }}
