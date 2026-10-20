@@ -10,7 +10,7 @@ import (
 
 const (
 	restartBackoffMin = 1 * time.Second
-	restartBackoffMax = 30 * time.Second
+	restartBackoffMax = 10 * time.Second
 	// A run lasting at least this long is considered healthy, resetting the backoff
 	restartBackoffResetAfter = 1 * time.Minute
 )
@@ -29,7 +29,8 @@ func getPortForwardSocksProxyArgs(port *PortForward, proxy *SocksProxy) []string
 	return []string{localChunk, remoteChunk}
 }
 
-// nextBackoff returns the delay before restarting a socat process, given the previous delay and how long the last run lasted
+// nextBackoff returns the delay before restarting a socat process, given the previous delay and how long the last run lasted.
+// socat is always restarted; the delay only grows up to restartBackoffMax.
 func nextBackoff(previous time.Duration, lastRun time.Duration) time.Duration {
 	if previous == 0 || lastRun >= restartBackoffResetAfter {
 		return restartBackoffMin
