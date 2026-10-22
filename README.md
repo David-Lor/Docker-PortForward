@@ -45,7 +45,10 @@ This will be applied to ALL the port mappings on the current container.
 
 ## Changelog
 
-- 0.2.0
+- 0.2.1
+  - Restart socat on exit
+  - Listen with reuseaddr
+  - Add tini to Docker image
   - Docker images for `linux/arm64/v8`, `linux/arm/v7`
 - 0.1.1
   - Port range forwarding (one socat command per port)
